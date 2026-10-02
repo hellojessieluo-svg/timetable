@@ -1,5 +1,5 @@
 /* 离线缓存：先走网络拿新版，断网就用缓存。 */
-const CACHE = 'timeblock-v1';
+const CACHE = 'timeblock-v2';
 const ASSETS = ['./', './index.html', './style.css', './app.js', './manifest.webmanifest',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 

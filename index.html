@@ -74,6 +74,8 @@
           <option value="">不重复</option>
           <option value="daily">每天</option>
           <option value="weekly">每周</option>
+          <option value="monthly">每月</option>
+          <option value="yearly">每年</option>
         </select>
       </label>
     </div>
@@ -81,6 +83,18 @@
       <button type="button" data-d="1">一</button><button type="button" data-d="2">二</button><button type="button" data-d="3">三</button>
       <button type="button" data-d="4">四</button><button type="button" data-d="5">五</button><button type="button" data-d="6">六</button><button type="button" data-d="7">日</button>
     </div>
+    <div class="row hidden" id="endRow">
+      <label class="field"><span>结束</span>
+        <select id="fEndKind" class="input">
+          <option value="">一直重复</option>
+          <option value="until">到某天</option>
+          <option value="count">共几次</option>
+        </select>
+      </label>
+      <label class="field hidden" id="fUntilWrap"><span>截止</span><input id="fUntil" type="date" class="input"></label>
+      <label class="field hidden" id="fCountWrap"><span>次数</span><input id="fCount" type="number" class="input" min="1" max="999" inputmode="numeric" placeholder="10"></label>
+    </div>
+    <p id="repHint" class="hint hidden"></p>
     <div class="sheet-actions">
       <button type="button" id="deleteBtn" class="btn danger hidden">删除</button>
       <span class="spacer"></span>

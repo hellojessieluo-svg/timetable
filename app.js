@@ -2,7 +2,7 @@
 (() => {
 'use strict';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const KEY = 'timeblock.v1';
 const PALETTE = ['#e5484d', '#3e8ef7', '#8e5cf6', '#2ba84a', '#f59e0b', '#06b6d4', '#ec4899', '#64748b'];
 const DEFAULT_CATS = [
@@ -35,15 +35,22 @@ function weekday(s) { return (parse(s).getDay() + 6) % 7 + 1; } // 一=1 … 日
 const WD = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
 // ---------- 重复展开 ----------
+// 规则本身是否命中这一天（不管截止、次数、单独改过的日子）
+function ruleHit(it, d) {
+  const r = it.repeat;
+  if (r.freq === 'daily') return true;
+  if (r.freq === 'weekly') return (r.days || []).includes(weekday(d));
+  if (r.freq === 'monthly') return d.slice(8) === it.date.slice(8);          // 每月同一号
+  if (r.freq === 'yearly') return d.slice(5) === it.date.slice(5);           // 每年同月同日
+  return false;
+}
 function matches(it, d) {
   const r = it.repeat;
   if (!r) return it.date === d;
   if (d < it.date) return false;
   if (r.until && d > r.until) return false;
   if ((it.exDates || []).includes(d)) return false;
-  if (r.freq === 'daily') return true;
-  if (r.freq === 'weekly') return (r.days || []).includes(weekday(d));
-  return false;
+  return ruleHit(it, d);
 }
 // 返回 { 'YYYY-MM-DD': [occ…] }，occ = { item, date, done }
 function occurrences(start, end) {
@@ -54,10 +61,15 @@ function occurrences(start, end) {
       if (it.date >= start && it.date <= end) push(it.date, { item: it, date: it.date, done: !!it.done });
       continue;
     }
-    let d = it.date > start ? it.date : start;
-    const stop = it.repeat.until && it.repeat.until < end ? it.repeat.until : end;
+    const r = it.repeat;
+    const stop = r.until && r.until < end ? r.until : end;
+    // 有次数限制就得从头数；否则从可见范围起点开始
+    let d = r.count ? it.date : (it.date > start ? it.date : start);
+    let n = 0;
     for (; d <= stop; d = addDays(d, 1)) {
-      if (matches(it, d)) push(d, { item: it, date: d, done: (it.doneDates || []).includes(d) });
+      if (!ruleHit(it, d)) continue;
+      if (r.count && ++n > r.count) break;
+      if (d >= start && !(it.exDates || []).includes(d)) push(d, { item: it, date: d, done: (it.doneDates || []).includes(d) });
     }
   }
   const rank = o => (o.item.type === 'event' ? 0 : 1);
@@ -254,6 +266,9 @@ function openEdit(occ, type) {
   $('fRepeat').value = it?.repeat?.freq || '';
   const days = it?.repeat?.days || [weekday($('fDate').value)];
   for (const b of $('fDays').children) b.classList.toggle('on', days.includes(+b.dataset.d));
+  $('fEndKind').value = it?.repeat?.until ? 'until' : (it?.repeat?.count ? 'count' : '');
+  $('fUntil').value = it?.repeat?.until || '';
+  $('fCount').value = it?.repeat?.count || '';
   renderCatChips(it ? it.catId : state.categories[0].id);
   updateRepeatUI();
   $('deleteBtn').classList.toggle('hidden', !it);
@@ -277,7 +292,19 @@ function renderCatChips(sel) {
   }
 }
 $('fRepeat').onchange = updateRepeatUI;
-function updateRepeatUI() { $('fDays').classList.toggle('hidden', $('fRepeat').value !== 'weekly'); }
+$('fEndKind').onchange = updateRepeatUI;
+$('fDate').addEventListener('change', updateRepeatUI);
+function updateRepeatUI() {
+  const freq = $('fRepeat').value, kind = $('fEndKind').value;
+  $('fDays').classList.toggle('hidden', freq !== 'weekly');
+  $('endRow').classList.toggle('hidden', !freq);
+  $('fUntilWrap').classList.toggle('hidden', kind !== 'until');
+  $('fCountWrap').classList.toggle('hidden', kind !== 'count');
+  const hint = $('repHint'); const d = $('fDate').value;
+  if (freq === 'monthly' && d) { hint.textContent = `每月 ${+d.slice(8)} 日（没有这一号的月份跳过）`; hint.classList.remove('hidden'); }
+  else if (freq === 'yearly' && d) { hint.textContent = `每年 ${+d.slice(5, 7)} 月 ${+d.slice(8)} 日`; hint.classList.remove('hidden'); }
+  else hint.classList.add('hidden');
+}
 $('fDays').addEventListener('click', e => { const b = e.target.closest('button'); if (b) b.classList.toggle('on'); });
 $('fDate').onchange = () => { // 新建每周重复时，默认勾当天
   if ($('fRepeat').value !== 'weekly' || editing?.occ) return;
@@ -292,6 +319,12 @@ function readForm() {
   let repeat = null;
   if (freq === 'daily') repeat = { freq: 'daily' };
   if (freq === 'weekly') repeat = { freq: 'weekly', days: days.length ? days : [weekday($('fDate').value)] };
+  if (freq === 'monthly' || freq === 'yearly') repeat = { freq };
+  if (repeat) {
+    const kind = $('fEndKind').value;
+    if (kind === 'until' && $('fUntil').value) repeat.until = $('fUntil').value;
+    if (kind === 'count' && +$('fCount').value > 0) repeat.count = Math.min(999, +$('fCount').value);
+  }
   return {
     type, title: $('fTitle').value.trim(),
     catId: $('fCats').querySelector('.on')?.dataset.id || state.categories[0].id,
